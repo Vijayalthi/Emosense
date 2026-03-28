@@ -1,0 +1,17 @@
+# Model Files
+backend/models/*.h5
+backend/models/*.json
+backend/models/*.xml
+
+#Python cache
+__pycache__/
+*.pyc 
+*.pyo 
+
+#Virtual Environment
+venv/
+.venv/
+env/
+
+#Logs
+*.log

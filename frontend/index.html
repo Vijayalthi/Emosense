@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EmoSense · Facial Emotion Recognition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:        #080b10;
+    --bg1:       #0d1117;
+    --bg2:       #131820;
+    --glass:     rgba(255,255,255,0.035);
+    --glass-b:   rgba(255,255,255,0.07);
+    --border:    rgba(255,255,255,0.08);
+    --border-hi: rgba(255,255,255,0.16);
+    --text:      #e8eaf0;
+    --text-dim:  #7a8090;
+    --text-sub:  #4a5060;
+    --accent:    #6c63ff;
+    --accent2:   #00d4aa;
+    --accent3:   #ff6b9d;
+
+    --angry:     #ff4757;
+    --disgust:   #a29bfe;
+    --fear:      #fd79a8;
+    --happy:     #fdcb6e;
+    --neutral:   #74b9ff;
+    --sad:       #636e72;
+    --surprised: #00cec9;
+
+    --r: 16px;
+    --r-sm: 8px;
+    --shadow: 0 24px 80px rgba(0,0,0,.6);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Noise grain overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: .4;
+  }
+
+  /* ── Background orbs ── */
+  .bg-orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: .18;
+    animation: drift 20s ease-in-out infinite;
+  }
+  .orb-1 { width: 600px; height: 600px; background: var(--accent); top: -200px; left: -200px; animation-delay: 0s; }
+  .orb-2 { width: 500px; height: 500px; background: var(--accent2); bottom: -150px; right: -100px; animation-delay: -7s; }
+  .orb-3 { width: 400px; height: 400px; background: var(--accent3); top: 40%; left: 50%; animation-delay: -14s; opacity: .1; }
+
+  @keyframes drift {
+    0%,100% { transform: translate(0,0) scale(1); }
+    33%      { transform: translate(40px,-30px) scale(1.05); }
+    66%      { transform: translate(-20px,20px) scale(.97); }
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* ── Nav ── */
+  nav {
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,11,16,.7);
+  }
+  .nav-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1280px; margin: 0 auto; padding: 0 24px;
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 22px;
+    background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,.5) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--accent2); -webkit-text-fill-color: var(--accent2); }
+  .nav-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; font-weight: 500;
+    background: rgba(108,99,255,.15);
+    border: 1px solid rgba(108,99,255,.3);
+    color: var(--accent);
+    padding: 4px 10px; border-radius: 20px;
+    letter-spacing: .5px;
+  }
+  .nav-links { display: flex; gap: 8px; }
+  .nav-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-dim);
+    background: none; border: none; cursor: pointer;
+    padding: 6px 14px; border-radius: 8px;
+    transition: all .2s;
+    text-decoration: none;
+  }
+  .nav-btn:hover { color: var(--text); background: var(--glass); }
+  .nav-btn.active { color: var(--text); }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 80px 0 60px;
+    text-align: center;
+  }
+  .hero-eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; font-weight: 400;
+    letter-spacing: 3px; text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 20px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .hero-eyebrow::before, .hero-eyebrow::after {
+    content: ''; display: block; width: 32px; height: 1px; background: var(--accent2); opacity: .4;
+  }
+  .hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(40px, 7vw, 88px);
+    font-weight: 800;
+    line-height: .95;
+    letter-spacing: -3px;
+    color: #fff;
+    margin-bottom: 24px;
+  }
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: 18px; font-weight: 300;
+    color: var(--text-dim);
+    max-width: 500px; margin: 0 auto 40px;
+    line-height: 1.7;
+  }
+
+  /* ── Pills row ── */
+  .pills { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .pill {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; font-weight: 400;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 14px; border-radius: 20px;
+    letter-spacing: .3px;
+  }
+  .pill.hi { border-color: rgba(108,99,255,.4); color: var(--accent); background: rgba(108,99,255,.08); }
+
+  /* ── Mode switcher ── */
+  .mode-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px; margin: 60px 0 32px;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 4px;
+    width: fit-content; margin-left: auto; margin-right: auto;
+  }
+  .mode-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 500;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim);
+    padding: 10px 28px; border-radius: 10px;
+    transition: all .25s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .mode-btn svg { width: 16px; height: 16px; opacity: .6; transition: opacity .25s; }
+  .mode-btn.active {
+    background: linear-gradient(135deg, var(--accent) 0%, #8b83ff 100%);
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(108,99,255,.4);
+  }
+  .mode-btn.active svg { opacity: 1; }
+
+  /* ── Main arena ── */
+  .arena {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    margin-bottom: 40px;
+  }
+
+  /* Glass card */
+  .card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    transition: border-color .3s;
+  }
+  .card:hover { border-color: var(--border-hi); }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 600;
+    letter-spacing: .5px; text-transform: uppercase;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent2);
+    animation: pulse 2s infinite;
+  }
+  .dot.inactive { background: var(--text-sub); animation: none; }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(0,212,170,.6); }
+    50%      { opacity: .8; transform: scale(1.1); box-shadow: 0 0 0 6px rgba(0,212,170,0); }
+  }
+
+  /* ── Video / canvas area ── */
+  .feed-wrap {
+    position: relative;
+    background: #000;
+    aspect-ratio: 4/3;
+    overflow: hidden;
+  }
+  #video, #overlay-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  #overlay-canvas { pointer-events: none; }
+
+  .upload-zone {
+    aspect-ratio: 4/3;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px;
+    border: 2px dashed var(--border);
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: all .3s;
+    padding: 40px;
+    text-align: center;
+    background: var(--glass);
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-zone::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at center, rgba(108,99,255,.06) 0%, transparent 70%);
+    opacity: 0; transition: opacity .3s;
+  }
+  .upload-zone:hover { border-color: var(--accent); }
+  .upload-zone:hover::before { opacity: 1; }
+  .upload-zone.drag-over { border-color: var(--accent2); background: rgba(0,212,170,.05); }
+  .upload-icon {
+    width: 64px; height: 64px;
+    background: rgba(108,99,255,.1);
+    border: 1px solid rgba(108,99,255,.25);
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .upload-icon svg { width: 28px; height: 28px; color: var(--accent); }
+  .upload-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 400;
+    color: var(--text-dim);
+  }
+  .upload-label strong { color: var(--text); font-weight: 500; }
+  .upload-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--text-sub);
+    letter-spacing: .5px;
+  }
+  #file-input { display: none; }
+
+  .preview-wrap {
+    position: relative;
+    aspect-ratio: 4/3;
+    background: #000;
+    border-radius: var(--r);
+    overflow: hidden;
+    display: none;
+  }
+  #preview-img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+  }
+  #preview-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  /* Camera controls */
+  .feed-controls {
+    padding: 14px 20px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500;
+    border: none; cursor: pointer;
+    border-radius: 10px; padding: 10px 20px;
+    transition: all .2s;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .btn svg { width: 15px; height: 15px; }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #8b83ff);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(108,99,255,.35);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(108,99,255,.5); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-ghost {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .btn-ghost:hover { border-color: var(--border-hi); color: var(--text); background: var(--glass-b); }
+  .btn-danger {
+    background: rgba(255,71,87,.1);
+    border: 1px solid rgba(255,71,87,.3);
+    color: #ff4757;
+  }
+  .btn-danger:hover { background: rgba(255,71,87,.2); }
+  .fps-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--text-sub);
+    margin-left: auto;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 6px;
+  }
+
+  /* ── Right panel ── */
+  .panel-content { padding: 20px; }
+
+  /* Primary emotion display */
+  .emotion-display {
+    text-align: center;
+    padding: 28px 20px;
+    border-radius: 14px;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    position: relative; overflow: hidden;
+    transition: all .4s;
+    min-height: 140px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .emotion-display::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 50%, var(--emotion-color, transparent) 0%, transparent 70%);
+    opacity: .08;
+    transition: opacity .4s;
+  }
+  .emotion-display.active::before { opacity: .15; }
+  .emotion-emoji {
+    font-size: 52px; line-height: 1;
+    margin-bottom: 10px;
+    transition: all .3s;
+    filter: drop-shadow(0 0 20px var(--emotion-color, transparent));
+  }
+  .emotion-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px; font-weight: 800;
+    letter-spacing: -1px;
+    color: var(--emotion-color, var(--text-dim));
+    transition: color .4s;
+  }
+  .emotion-conf {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px; font-weight: 400;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Emotion bars */
+  .emotion-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; }
+  .bar-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; font-weight: 400;
+    color: var(--text-dim);
+    width: 64px; text-align: right;
+    flex-shrink: 0;
+    letter-spacing: .3px;
+  }
+  .bar-track {
+    flex: 1; height: 6px;
+    background: rgba(255,255,255,.06);
+    border-radius: 3px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width .5s cubic-bezier(.34,1.56,.64,1);
+    background: var(--emotion-color, var(--accent));
+  }
+  .bar-pct {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; color: var(--text-sub);
+    width: 36px; text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* Stats strip */
+  .stats-strip {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 20px; font-weight: 500;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px; color: var(--text-sub); font-weight: 300;
+  }
+
+  /* History strip */
+  .history-label {
+    font-family: 'Syne', sans-serif;
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--text-sub);
+    margin-bottom: 10px;
+  }
+  .history-dots {
+    display: flex; gap: 5px; flex-wrap: wrap;
+  }
+  .h-dot {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    transition: transform .2s;
+    cursor: default;
+  }
+  .h-dot:hover { transform: scale(1.2); }
+
+  /* Divider */
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* ── No face state ── */
+  .no-face {
+    text-align: center; padding: 40px 20px;
+    display: none; flex-direction: column;
+    align-items: center; gap: 12px;
+  }
+  .no-face.show { display: flex; }
+  .no-face svg { width: 48px; height: 48px; color: var(--text-sub); }
+  .no-face p { font-size: 13px; color: var(--text-sub); font-weight: 300; }
+
+  /* ── Footer note ── */
+  .footer-note {
+    text-align: center;
+    padding: 40px 24px;
+    font-size: 13px; color: var(--text-sub); font-weight: 300;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .footer-note a { color: var(--accent); text-decoration: none; }
+  .footer-note a:hover { text-decoration: underline; }
+
+  /* ── Model info banner ── */
+  .model-banner {
+    background: rgba(0,212,170,.05);
+    border: 1px solid rgba(0,212,170,.15);
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .model-banner svg { flex-shrink: 0; color: var(--accent2); }
+  .model-banner p {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .model-banner strong { color: var(--accent2); }
+
+  /* Loading spinner */
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid rgba(255,255,255,.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .arena { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .hero h1 { font-size: 40px; letter-spacing: -2px; }
+    .nav-links { display: none; }
+  }
+
+  /* Tab panels */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Scan line animation on detection */
+  @keyframes scan {
+    from { top: 0; } to { top: 100%; }
+  }
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .scanning .scan-line { animation: scan .5s ease-in-out; opacity: .8; }
+
+  /* Face box drawn on canvas — styled via JS */
+</style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <div class="logo">Emo<span>Sense</span></div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="nav-badge">v2.0</span>
+      <div class="nav-links">
+        <a href="#arena" class="nav-btn active">Demo</a>
+        <a href="https://github.com/Vijayalthi/facial-emotion-recognition" target="_blank" class="nav-btn">GitHub</a>
+        <a href="/docs" target="_blank" class="nav-btn">API Docs</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="container">
+  <section class="hero">
+    <div class="hero-eyebrow">Deep Learning · Computer Vision</div>
+    <h1>Read Every<br/><em>Emotion</em></h1>
+    <p>Real-time facial emotion recognition powered by a VGG16 + LSTM architecture trained on FER2013.</p>
+    <div class="pills">
+      <span class="pill hi">VGG16 + LSTM</span>
+      <span class="pill">7 Emotions</span>
+      <span class="pill">FER2013</span>
+      <span class="pill">OpenCV</span>
+      <span class="pill">TensorFlow 2</span>
+      <span class="pill">FastAPI</span>
+    </div>
+  </section>
+
+  <!-- MODE SWITCHER -->
+  <div class="mode-bar">
+    <button class="mode-btn active" id="btn-webcam" onclick="switchMode('webcam')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7 16 12 23 17V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      Live Camera
+    </button>
+    <button class="mode-btn" id="btn-upload" onclick="switchMode('upload')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Upload Image
+    </button>
+  </div>
+
+  <!-- ARENA -->
+  <div class="arena" id="arena">
+
+    <!-- LEFT: feed panel -->
+    <div class="card" id="feed-card">
+      <div class="card-header">
+        <div class="card-title">
+          <div class="dot inactive" id="status-dot"></div>
+          <span id="feed-title">Live Feed</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="status-text" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text-sub);">Idle</span>
+        </div>
+      </div>
+
+      <!-- Webcam tab -->
+      <div class="tab-panel active" id="panel-webcam">
+        <div class="feed-wrap" id="feed-wrap">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlay-canvas"></canvas>
+          <div class="scan-line" id="scan-line"></div>
+        </div>
+        <div class="feed-controls">
+          <button class="btn btn-primary" id="cam-start-btn" onclick="startCamera()">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+            Start Camera
+          </button>
+          <button class="btn btn-danger" id="cam-stop-btn" onclick="stopCamera()" style="display:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+            Stop
+          </button>
+          <span class="fps-badge" id="fps-badge">— fps</span>
+        </div>
+      </div>
+
+      <!-- Upload tab -->
+      <div class="tab-panel" id="panel-upload">
+        <div class="upload-zone" id="upload-zone"
+          onclick="document.getElementById('file-input').click()"
+          ondragover="handleDragOver(event)"
+          ondragleave="handleDragLeave(event)"
+          ondrop="handleDrop(event)">
+          <div class="upload-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div class="upload-label"><strong>Drop an image here</strong> or click to browse</div>
+          <div class="upload-sub">JPG · PNG · WEBP · GIF</div>
+        </div>
+        <div class="preview-wrap" id="preview-wrap">
+          <img id="preview-img" alt="preview"/>
+          <canvas id="preview-canvas"></canvas>
+        </div>
+        <div class="feed-controls">
+          <button class="btn btn-ghost" onclick="clearUpload()">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+            Clear
+          </button>
+          <button class="btn btn-primary" id="analyze-btn" onclick="analyzeUpload()" style="display:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Analyze
+          </button>
+        </div>
+        <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)"/>
+      </div>
+    </div>
+
+    <!-- RIGHT: results panel -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>Analysis</span>
+        </div>
+      </div>
+      <div class="panel-content">
+
+        <div class="model-banner">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <p><strong>VGG16 + LSTM</strong> · 7-class FER2013<br/>Haar cascade face detection</p>
+        </div>
+
+        <!-- Primary emotion -->
+        <div class="emotion-display" id="emotion-display" style="--emotion-color: var(--text-sub)">
+          <div class="emotion-emoji" id="emotion-emoji">🎭</div>
+          <div class="emotion-name" id="emotion-name">Waiting…</div>
+          <div class="emotion-conf" id="emotion-conf">Point your face at the camera</div>
+        </div>
+
+        <!-- No face -->
+        <div class="no-face" id="no-face">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 15h8M9 9h.01M15 9h.01"/><path d="M9 9a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z" fill="currentColor"/><path d="M16 9a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0z" fill="currentColor"/></svg>
+          <p>No face detected.<br/>Adjust position and lighting.</p>
+        </div>
+
+        <!-- Emotion bars -->
+        <div class="emotion-bars" id="emotion-bars"></div>
+
+        <div class="divider"></div>
+
+        <!-- Stats -->
+        <div class="stats-strip">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-faces">—</div>
+            <div class="stat-label">Faces detected</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-ms">—</div>
+            <div class="stat-label">Inference ms</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- History -->
+        <div class="history-label">Recent emotions</div>
+        <div class="history-dots" id="history-dots">
+          <span style="font-size:12px;color:var(--text-sub);font-family:'DM Mono',monospace;">No history yet</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-note container">
+  Built with FastAPI · TensorFlow · OpenCV ·
+  <a href="https://github.com/Vijayalthi/facial-emotion-recognition" target="_blank">View source on GitHub</a>
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────────────────────────
+const API = '';  // same origin; change to 'http://localhost:8000' for dev
+
+const EMOTIONS = {
+  Angry:     { emoji: '😠', color: '#ff4757' },
+  Disgust:   { emoji: '🤢', color: '#a29bfe' },
+  Fear:      { emoji: '😨', color: '#fd79a8' },
+  Happy:     { emoji: '😄', color: '#fdcb6e' },
+  Neutral:   { emoji: '😐', color: '#74b9ff' },
+  Sad:       { emoji: '😢', color: '#636e72' },
+  Surprised: { emoji: '😲', color: '#00cec9' },
+};
+const ORDER = Object.keys(EMOTIONS);
+
+// ── State ──────────────────────────────────────────────────────────────────
+let mode = 'webcam';
+let stream = null;
+let rafId = null;
+let isRunning = false;
+let lastFrameTime = 0;
+let frameCount = 0;
+let fpsTimer = 0;
+let currentFps = 0;
+let history = [];
+let pendingRequest = false;
+let uploadedFile = null;
+
+// ── Mode switching ──────────────────────────────────────────────────────────
+function switchMode(m) {
+  mode = m;
+  stopCamera();
+  document.getElementById('panel-webcam').classList.toggle('active', m === 'webcam');
+  document.getElementById('panel-upload').classList.toggle('active', m === 'upload');
+  document.getElementById('btn-webcam').classList.toggle('active', m === 'webcam');
+  document.getElementById('btn-upload').classList.toggle('active', m === 'upload');
+  document.getElementById('feed-title').textContent = m === 'webcam' ? 'Live Feed' : 'Image Analysis';
+  resetResults();
+}
+
+// ── Camera ─────────────────────────────────────────────────────────────────
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+    });
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    await video.play();
+
+    document.getElementById('cam-start-btn').style.display = 'none';
+    document.getElementById('cam-stop-btn').style.display = 'flex';
+    document.getElementById('status-dot').classList.remove('inactive');
+    setStatus('Live');
+    isRunning = true;
+    lastFrameTime = performance.now();
+    loop();
+  } catch (e) {
+    alert('Camera access denied. Please allow camera permissions.');
+    console.error(e);
+  }
+}
+
+function stopCamera() {
+  isRunning = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  const video = document.getElementById('video');
+  video.srcObject = null;
+  clearCanvas('overlay-canvas');
+  document.getElementById('cam-start-btn').style.display = 'flex';
+  document.getElementById('cam-stop-btn').style.display = 'none';
+  document.getElementById('status-dot').classList.add('inactive');
+  document.getElementById('fps-badge').textContent = '— fps';
+  setStatus('Idle');
+  resetResults();
+}
+
+// ── Main capture loop ───────────────────────────────────────────────────────
+function loop() {
+  if (!isRunning) return;
+  rafId = requestAnimationFrame(loop);
+
+  const now = performance.now();
+  frameCount++;
+  if (now - fpsTimer > 1000) {
+    currentFps = frameCount;
+    frameCount = 0;
+    fpsTimer = now;
+    document.getElementById('fps-badge').textContent = currentFps + ' fps';
+  }
+
+  // throttle API calls to ~6 fps
+  if (now - lastFrameTime < 160 || pendingRequest) return;
+  lastFrameTime = now;
+
+  const video = document.getElementById('video');
+  if (video.readyState < 2) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const b64 = canvas.toDataURL('image/jpeg', 0.75);
+
+  pendingRequest = true;
+  fetch(`${API}/predict/frame`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: b64 }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    handleResult(data);
+    drawOverlay(video.videoWidth, video.videoHeight, data.faces);
+    pendingRequest = false;
+  })
+  .catch(() => { pendingRequest = false; });
+}
+
+// ── Upload ─────────────────────────────────────────────────────────────────
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) loadFile(file);
+}
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.add('drag-over');
+}
+function handleDragLeave() {
+  document.getElementById('upload-zone').classList.remove('drag-over');
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadFile(file);
+}
+function loadFile(file) {
+  uploadedFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('preview-img');
+    img.src = ev.target.result;
+    document.getElementById('upload-zone').style.display = 'none';
+    const pw = document.getElementById('preview-wrap');
+    pw.style.display = 'block';
+    clearCanvas('preview-canvas');
+    document.getElementById('analyze-btn').style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+function clearUpload() {
+  uploadedFile = null;
+  document.getElementById('upload-zone').style.display = 'flex';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('analyze-btn').style.display = 'none';
+  document.getElementById('file-input').value = '';
+  clearCanvas('preview-canvas');
+  resetResults();
+}
+async function analyzeUpload() {
+  if (!uploadedFile) return;
+  const btn = document.getElementById('analyze-btn');
+  btn.innerHTML = '<div class="spinner"></div> Analyzing…';
+  btn.disabled = true;
+  setStatus('Analyzing…');
+
+  const formData = new FormData();
+  formData.append('file', uploadedFile);
+
+  try {
+    const r = await fetch(`${API}/predict/image`, { method: 'POST', body: formData });
+    const data = await r.json();
+    handleResult(data);
+    const img = document.getElementById('preview-img');
+    drawOverlayOnImage(img, data.faces);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Analyze`;
+    btn.disabled = false;
+    setStatus('Done');
+  }
+}
+
+// ── Result rendering ────────────────────────────────────────────────────────
+function handleResult(data) {
+  const display = document.getElementById('emotion-display');
+  const noFace = document.getElementById('no-face');
+  const bars = document.getElementById('emotion-bars');
+
+  document.getElementById('stat-faces').textContent = data.face_count;
+  document.getElementById('stat-ms').textContent = data.inference_ms.toFixed(0);
+
+  if (!data.faces || data.faces.length === 0) {
+    display.style.display = 'flex';
+    noFace.classList.add('show');
+    document.getElementById('emotion-emoji').textContent = '🔍';
+    document.getElementById('emotion-name').textContent = 'No face';
+    document.getElementById('emotion-conf').textContent = '';
+    document.getElementById('emotion-display').style.setProperty('--emotion-color', 'var(--text-sub)');
+    bars.innerHTML = '';
+    return;
+  }
+
+  noFace.classList.remove('show');
+  const face = data.faces[0];
+  const label = face.label;
+  const einfo = EMOTIONS[label] || { emoji: '🎭', color: '#888' };
+
+  display.classList.add('active');
+  display.style.setProperty('--emotion-color', einfo.color);
+  document.getElementById('emotion-emoji').textContent = einfo.emoji;
+  document.getElementById('emotion-name').textContent = label;
+  document.getElementById('emotion-conf').textContent =
+    (face.confidence * 100).toFixed(1) + '% confidence';
+
+  // Bars
+  bars.innerHTML = '';
+  const scores = face.all_scores || {};
+  ORDER.forEach(e => {
+    const score = scores[e] || 0;
+    const pct = (score * 100).toFixed(1);
+    const color = EMOTIONS[e]?.color || '#888';
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <span class="bar-label">${e}</span>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:0%;--emotion-color:${color}" data-pct="${pct}"></div>
+      </div>
+      <span class="bar-pct">${pct}%</span>
+    `;
+    bars.appendChild(row);
+    requestAnimationFrame(() => {
+      const fill = row.querySelector('.bar-fill');
+      fill.style.width = pct + '%';
+    });
+  });
+
+  // History
+  history.unshift({ label, emoji: einfo.emoji });
+  if (history.length > 20) history.pop();
+  renderHistory();
+
+  // Scan flash
+  triggerScan();
+}
+
+function renderHistory() {
+  const container = document.getElementById('history-dots');
+  if (history.length === 0) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--text-sub);font-family:\'DM Mono\',monospace;">No history yet</span>';
+    return;
+  }
+  container.innerHTML = history.slice(0, 14).map(h =>
+    `<div class="h-dot" title="${h.label}">${h.emoji}</div>`
+  ).join('');
+}
+
+function resetResults() {
+  document.getElementById('emotion-display').classList.remove('active');
+  document.getElementById('emotion-emoji').textContent = '🎭';
+  document.getElementById('emotion-name').textContent = 'Waiting…';
+  document.getElementById('emotion-conf').textContent = 'Point your face at the camera';
+  document.getElementById('emotion-display').style.setProperty('--emotion-color', 'var(--text-sub)');
+  document.getElementById('emotion-bars').innerHTML = '';
+  document.getElementById('stat-faces').textContent = '—';
+  document.getElementById('stat-ms').textContent = '—';
+  document.getElementById('no-face').classList.remove('show');
+}
+
+// ── Canvas overlay ─────────────────────────────────────────────────────────
+function drawOverlay(vw, vh, faces) {
+  const canvas = document.getElementById('overlay-canvas');
+  const wrap = document.getElementById('feed-wrap');
+  canvas.width = wrap.offsetWidth;
+  canvas.height = wrap.offsetHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!faces || faces.length === 0) return;
+
+  const scaleX = canvas.width / vw;
+  const scaleY = canvas.height / vh;
+
+  faces.forEach(face => {
+    const [bx, by, bw, bh] = face.box;
+    const x = bx * scaleX, y = by * scaleY;
+    const w = bw * scaleX, h = bh * scaleY;
+    const color = EMOTIONS[face.label]?.color || '#fff';
+    const conf = (face.confidence * 100).toFixed(1);
+    const emoji = EMOTIONS[face.label]?.emoji || '';
+
+    // Glow
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    ctx.shadowBlur = 0;
+
+    // Corner brackets
+    const cs = 18;
+    ctx.lineWidth = 3;
+    [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([cx,cy,dx,dy]) => {
+      ctx.beginPath();
+      ctx.moveTo(cx + dx*cs, cy);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx, cy + dy*cs);
+      ctx.stroke();
+    });
+
+    // Label pill
+    ctx.font = 'bold 13px "DM Sans", sans-serif';
+    const text = `${emoji} ${face.label}  ${conf}%`;
+    const tw = ctx.measureText(text).width;
+    const pw = tw + 20, ph = 26;
+    const px = x, py = y - ph - 6;
+    ctx.fillStyle = color + 'cc';
+    roundRect(ctx, px, py, pw, ph, 6);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.fillText(text, px + 10, py + ph/2 + 5);
+  });
+}
+
+function drawOverlayOnImage(img, faces) {
+  if (!faces || faces.length === 0) return;
+  const canvas = document.getElementById('preview-canvas');
+  const wrap = document.getElementById('preview-wrap');
+  canvas.width = wrap.offsetWidth;
+  canvas.height = wrap.offsetHeight;
+
+  const naturalW = img.naturalWidth;
+  const naturalH = img.naturalHeight;
+  const dispW = wrap.offsetWidth;
+  const dispH = wrap.offsetHeight;
+
+  // contain scaling
+  const scale = Math.min(dispW / naturalW, dispH / naturalH);
+  const rw = naturalW * scale;
+  const rh = naturalH * scale;
+  const ox = (dispW - rw) / 2;
+  const oy = (dispH - rh) / 2;
+
+  const sx = rw / naturalW;
+  const sy = rh / naturalH;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  faces.forEach(face => {
+    const [bx, by, bw, bh] = face.box;
+    const x = ox + bx * sx, y = oy + by * sy;
+    const w = bw * sx, h = bh * sy;
+    const color = EMOTIONS[face.label]?.color || '#fff';
+    const emoji = EMOTIONS[face.label]?.emoji || '';
+
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 20;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+    ctx.shadowBlur = 0;
+
+    const cs = 16;
+    ctx.lineWidth = 3;
+    [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([cx,cy,dx,dy]) => {
+      ctx.beginPath();
+      ctx.moveTo(cx+dx*cs, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy+dy*cs);
+      ctx.stroke();
+    });
+
+    ctx.font = 'bold 13px "DM Sans", sans-serif';
+    const text = `${emoji} ${face.label}  ${(face.confidence*100).toFixed(1)}%`;
+    const tw = ctx.measureText(text).width;
+    const pw = tw + 20, ph = 26, px = x, py = y - ph - 6;
+    ctx.fillStyle = color + 'cc';
+    roundRect(ctx, px, py, pw, ph, 6);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.fillText(text, px + 10, py + ph/2 + 5);
+  });
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r); ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h); ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r); ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath();
+}
+
+function clearCanvas(id) {
+  const c = document.getElementById(id);
+  if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+}
+
+function triggerScan() {
+  const wrap = document.getElementById('feed-wrap');
+  if (wrap) { wrap.classList.add('scanning'); setTimeout(() => wrap.classList.remove('scanning'), 500); }
+}
+
+function setStatus(s) {
+  document.getElementById('status-text').textContent = s;
+}
+
+// ── Health check on load ────────────────────────────────────────────────────
+fetch(`${API}/health`)
+  .then(r => r.json())
+  .then(d => {
+    if (!d.model_loaded) {
+      console.warn('Model not loaded — running in demo mode');
+    }
+  })
+  .catch(() => {});
+
+// Init bars empty
+ORDER.forEach(e => {
+  const row = document.createElement('div');
+  row.className = 'bar-row';
+  const color = EMOTIONS[e]?.color || '#888';
+  row.innerHTML = `
+    <span class="bar-label">${e}</span>
+    <div class="bar-track"><div class="bar-fill" style="width:0%;--emotion-color:${color}"></div></div>
+    <span class="bar-pct">0%</span>`;
+  document.getElementById('emotion-bars').appendChild(row);
+});
+</script>
+</body>
+</html>
