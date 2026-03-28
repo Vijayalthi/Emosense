@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 LABEL maintainer="Vijayalthi"
-LABEL description="Facial Emotion Recognition — FastAPI + TensorFlow"
+LABEL description="EmoSense — Facial Emotion Recognition — FastAPI + TensorFlow"
 
 # System deps for OpenCV
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,22 +15,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python deps first (cache layer)
+# Install Python deps first (cached layer — only re-runs if requirements.txt changes)
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source
+# Copy source code
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
-COPY backend/models/ ./models/ 2>/dev/null || true
+
+# Create empty models folder — main.py will download files here on first startup
+RUN mkdir -p backend/models
 
 WORKDIR /app/backend
 
-# Create model directory
-RUN mkdir -p models
-
-ENV MODEL_PATH=/app/models/emotion_model.h5
-ENV CASCADE_PATH=/app/models/haarcascade_frontalface_default.xml
+ENV MODEL_PATH=models/emotion_model.h5
+ENV CASCADE_PATH=models/haarcascade_frontalface_default.xml
 ENV PORT=8000
 
 EXPOSE 8000
