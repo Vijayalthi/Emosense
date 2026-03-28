@@ -3,9 +3,9 @@ FROM python:3.11-slim
 LABEL maintainer="Vijayalthi"
 LABEL description="EmoSense — Facial Emotion Recognition — FastAPI + TensorFlow"
 
-# System deps for OpenCV
+# System deps for OpenCV (libgl1 replaces libgl1-mesa-glx on Debian trixie+)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python deps first (cached layer — only re-runs if requirements.txt changes)
+# Install Python deps first (cached layer)
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
-# Create empty models folder — main.py will download files here on first startup
+# Create empty models folder — main.py downloads files here on first startup
 RUN mkdir -p backend/models
 
 WORKDIR /app/backend
