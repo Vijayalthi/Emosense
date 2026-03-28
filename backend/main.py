@@ -1,6 +1,7 @@
 """
 Facial Emotion Recognition — FastAPI Backend
 Supports: single image upload, base64 frame (webcam), batch prediction
+Auto-downloads model from Hugging Face on first startup if not present locally.
 """
 
 import os
@@ -8,6 +9,7 @@ import io
 import base64
 import logging
 import time
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -16,7 +18,7 @@ import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from src.model import EmotionModel
@@ -26,9 +28,44 @@ from src.inference import run_inference
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ── Auto-download model from Hugging Face if not present ──────────────────────
+HF_BASE   = "https://huggingface.co/Vijayalthi/Emosense-model/resolve/main"
+MODEL_PATH   = os.getenv("MODEL_PATH",   "models/emotion_model.h5")
+CASCADE_PATH = os.getenv("CASCADE_PATH", "models/haarcascade_frontalface_default.xml")
+JSON_PATH    = "models/class_indices.json"
+
+def download_model_if_needed():
+    model_file = Path(MODEL_PATH)
+    json_file  = Path(JSON_PATH)
+
+    if model_file.exists() and json_file.exists():
+        logger.info("Model files already present — skipping download.")
+        return
+
+    logger.info("Model not found locally. Downloading from Hugging Face...")
+    Path("models").mkdir(parents=True, exist_ok=True)
+
+    if not model_file.exists():
+        url = f"{HF_BASE}/emotion_model.h5"
+        logger.info(f"  Downloading emotion_model.h5 from {url}")
+        urllib.request.urlretrieve(url, str(model_file))
+        logger.info(f"  emotion_model.h5 downloaded ({model_file.stat().st_size // 1024 // 1024} MB)")
+
+    if not json_file.exists():
+        url = f"{HF_BASE}/class_indices.json"
+        logger.info(f"  Downloading class_indices.json from {url}")
+        urllib.request.urlretrieve(url, str(json_file))
+        logger.info("  class_indices.json downloaded.")
+
+    logger.info("Model download complete.")
+
+# Run download before anything else
+download_model_if_needed()
+
+# ── FastAPI app ───────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="Facial Emotion Recognition API",
-    description="Real-time facial emotion detection using VGG16 + LSTM",
+    title="EmoSense — Facial Emotion Recognition API",
+    description="Real-time facial emotion detection using a Deep CNN trained on FER2013",
     version="2.0.0",
 )
 
@@ -42,9 +79,6 @@ app.add_middleware(
 # ── Global model state ────────────────────────────────────────────────────────
 emotion_model: Optional[EmotionModel] = None
 face_detector: Optional[FaceDetector] = None
-
-MODEL_PATH = os.getenv("MODEL_PATH", "models/emotion_model.h5")
-CASCADE_PATH = os.getenv("CASCADE_PATH", "models/haarcascade_frontalface_default.xml")
 
 
 @app.on_event("startup")
@@ -124,7 +158,6 @@ def _process_frame(frame: np.ndarray) -> PredictResponse:
     t0 = time.perf_counter()
 
     if emotion_model is None or not emotion_model.is_loaded:
-        # Demo mode — return mock results
         return _mock_response(time.perf_counter() - t0)
 
     faces = face_detector.detect(frame)
@@ -174,7 +207,7 @@ def _mock_response(elapsed: float) -> PredictResponse:
 # ── Serve frontend ─────────────────────────────────────────────────────────────
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
-# Only mount /static if it exists (it's optional)
+# Only mount /static subfolder if it exists (it is optional)
 STATIC_DIR = FRONTEND_DIR / "static"
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
